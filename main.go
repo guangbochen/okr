@@ -17,22 +17,26 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"os"
 
+	"github.com/oneblock-ai/okr/internal/controller/controlplane"
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/klog/v2/klogr"
 
+	"github.com/spf13/pflag"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
-	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	bootstrapv1 "github.com/oneblock-ai/okr/api/bootstrap/v1"
+	controlplanev1 "github.com/oneblock-ai/okr/api/controlplane/v1"
 	"github.com/oneblock-ai/okr/internal/controller/bootstrap"
 	//+kubebuilder:scaffold:imports
 )
@@ -40,44 +44,36 @@ import (
 var (
 	scheme   = runtime.NewScheme()
 	setupLog = ctrl.Log.WithName("setup")
+
+	// flags
+	metricsBindAddr      string
+	enableLeaderElection bool
+	logLevel             int
+	healthAddr           string
 )
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(bootstrapv1.AddToScheme(scheme))
+	utilruntime.Must(controlplanev1.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 
-type Config struct {
-	MetricsBindAddress     string
-	HealthProbeBindAddress string
-	LeaderElect            bool
-	LogLevel               int
-}
-
 func main() {
-	cfg := &Config{}
-	flag.StringVar(&cfg.MetricsBindAddress, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
-	flag.StringVar(&cfg.HealthProbeBindAddress, "health-probe-bind-address", ":9440", "The address the probe endpoint binds to.")
-	flag.BoolVar(&cfg.LeaderElect, "leader-elect", false,
-		"Enable leader election for bootstrap manager. "+
-			"Enabling this will ensure there is only one active bootstrap manager.")
-	flag.IntVar(&cfg.LogLevel, "log-level", 0, "The log level for bootstrap manager.")
-	opts := zap.Options{
-		Development: true,
-	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
+	initFlags(pflag.CommandLine)
+	pflag.CommandLine.AddGoFlagSet(flag.CommandLine)
+	pflag.Parse()
 
-	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	ctrl.SetLogger(klogr.New())
+	ctx := ctrl.SetupSignalHandler()
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
-		Metrics:                metricsserver.Options{BindAddress: cfg.MetricsBindAddress},
-		HealthProbeBindAddress: cfg.HealthProbeBindAddress,
-		LeaderElection:         cfg.LeaderElect,
-		LeaderElectionID:       "bbda7d89.okr.oneblock.ai",
+		Metrics:                metricsserver.Options{BindAddress: metricsBindAddr},
+		HealthProbeBindAddress: healthAddr,
+		LeaderElection:         enableLeaderElection,
+		LeaderElectionID:       "okr-provider.clusters.x-k8s.io",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the Manager ends. This requires the binary to immediately end when the
 		// Manager is stopped, otherwise, this setting is unsafe. Setting this significantly
@@ -95,17 +91,26 @@ func main() {
 		os.Exit(1)
 	}
 
-	ctx := ctrl.SetupSignalHandler()
+	setupProbes(mgr)
+	setupReconcilers(ctx, mgr)
 
-	if err = (&bootstrap.Ok3sConfigReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
-	}).SetupWithManager(mgr, ctx); err != nil {
-		setupLog.Error(err, "unable to create bootstrap", "bootstrap", "Ok3sConfig")
+	setupLog.Info("starting manager")
+	if err := mgr.Start(ctx); err != nil {
+		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
-	//+kubebuilder:scaffold:builder
+}
 
+func initFlags(flag *pflag.FlagSet) {
+	flag.StringVar(&metricsBindAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&healthAddr, "health-probe-bind-address", ":9440", "The address the probe endpoint binds to.")
+	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+		"Enable leader election for bootstrap manager. "+
+			"Enabling this will ensure there is only one active bootstrap manager.")
+	flag.IntVar(&logLevel, "log-level", 0, "The log level for bootstrap manager.")
+}
+
+func setupProbes(mgr ctrl.Manager) {
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
 		os.Exit(1)
@@ -115,9 +120,23 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting manager")
-	if err := mgr.Start(ctx); err != nil {
-		setupLog.Error(err, "problem running manager")
+}
+
+func setupReconcilers(ctx context.Context, mgr ctrl.Manager) {
+	if err := (&bootstrap.Ok3sConfigReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr, ctx); err != nil {
+		setupLog.Error(err, "unable to create bootstrap", "bootstrap", "Ok3sConfig")
 		os.Exit(1)
 	}
+
+	if err := (&controlplane.Reconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr, ctx); err != nil {
+		setupLog.Error(err, "unable to create control plane", "control-plane", "Ok3sControlPlane")
+		os.Exit(1)
+	}
+	//+kubebuilder:scaffold:builder
 }

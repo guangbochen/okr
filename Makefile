@@ -40,7 +40,7 @@ TOOLS_BIN_DIR := $(abspath $(TOOLS_DIR)/$(BIN_DIR))
 export PATH := $(abspath $(TOOLS_BIN_DIR)):$(PATH)
 
 # Set --output-base for conversion-gen if we are not within GOPATH
-ifneq ($(abspath $(ROOT_DIR)),$(shell go env GOPATH)/src/github.com/capi-samples/cluster-api-provider-kwok)
+ifneq ($(abspath $(ROOT_DIR)),$(shell go env GOPATH)/src/github.com/oneblock-ai/okr)
 	CONVERSION_GEN_OUTPUT_BASE := --output-base=$(ROOT_DIR)
 else
 	export GOPATH := $(shell go env GOPATH)
@@ -117,7 +117,7 @@ help: ## Display this help.
 generate: generate-modules generate-manifests generate-go-deepcopy ## Run all generate-manifests, generate-go-deepcopy targets
 
 .PHONY: generate-manifests
-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+generate-manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(MAKE) clean-generated-yaml SRC_DIRS="./config/crd/bases"
 	$(CONTROLLER_GEN) \
 		paths=./api/... \
@@ -145,6 +145,22 @@ generate-go-deepcopy: $(CONTROLLER_GEN) ## Generate deepcopy go code for the OKR
 generate-modules: ## Run go mod tidy to ensure modules are up to date
 	go mod tidy
 
+
+## --------------------------------------
+## Lint / Verify
+## --------------------------------------
+
+##@ lint and verify:
+
+.PHONY: lint
+lint: $(GOLANGCI_LINT) ## Lint the codebase
+	$(GOLANGCI_LINT) run -v --timeout 5m $(GOLANGCI_LINT_EXTRA_ARGS)
+	./scripts/ci-lint-dockerfiles.sh $(HADOLINT_VER) $(HADOLINT_FAILURE_THRESHOLD)
+
+.PHONY: lint-fix
+lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
+	$(GOLANGCI_LINT) run --fix
+
 .PHONY: fmt
 fmt: ## Run go fmt against code.
 	go fmt ./...
@@ -153,25 +169,34 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
-.PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
+APIDIFF_OLD_COMMIT ?= $(shell git rev-parse origin/main)
 
-GOLANGCI_LINT = $(shell pwd)/bin/golangci-lint
-GOLANGCI_LINT_VERSION ?= v1.54.2
-golangci-lint:
-	@[ -f $(GOLANGCI_LINT) ] || { \
-	set -e ;\
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell dirname $(GOLANGCI_LINT)) $(GOLANGCI_LINT_VERSION) ;\
-	}
+.PHONY: apidiff
+apidiff: $(GO_APIDIFF) ## Check for API differences
+	$(GO_APIDIFF) $(APIDIFF_OLD_COMMIT) --print-compatible
 
-.PHONY: lint
-lint: golangci-lint ## Run golangci-lint linter & yamllint
-	$(GOLANGCI_LINT) run
+ALL_VERIFY_CHECKS = modules gen
 
-.PHONY: lint-fix
-lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
-	$(GOLANGCI_LINT) run --fix
+.PHONY: verify
+verify: $(addprefix verify-,$(ALL_VERIFY_CHECKS)) lint-dockerfiles ## Run all verify-* targets
+
+.PHONY: verify-modules
+verify-modules: generate-modules  ## Verify go modules are up to date
+	@if !(git diff --quiet HEAD -- go.sum go.mod $(TOOLS_DIR)/go.mod $(TOOLS_DIR)/go.sum $(TEST_DIR)/go.mod $(TEST_DIR)/go.sum); then \
+		git diff; \
+		echo "go module files are out of date"; exit 1; \
+	fi
+	@if (find . -name 'go.mod' | xargs -n1 grep -q -i 'k8s.io/client-go.*+incompatible'); then \
+		find . -name "go.mod" -exec grep -i 'k8s.io/client-go.*+incompatible' {} \; -print; \
+		echo "go module contains an incompatible client-go version"; exit 1; \
+	fi
+
+.PHONY: verify-gen
+verify-gen: generate  ## Verify go generated files are up to date
+	@if !(git diff --quiet HEAD); then \
+		git diff; \
+		echo "generated files are out of date, run make generate"; exit 1; \
+	fi
 
 ##@ Build
 
@@ -183,16 +208,39 @@ build: manifests generate fmt vet ## Build manager binary.
 run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./cmd/main.go
 
+.PHONY: binaries
+binaries: managers ## Builds and installs all binaries
+
+.PHONY: managers
+managers: ## Build the provider  binary into the ./bin folder
+	go build -trimpath -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/manager github.com/oneblock-ai/okr
+
+## --------------------------------------
+## Docker
+## --------------------------------------
+
+##@ docker:
+
+.PHONY: docker-pull-prerequisites
+docker-pull-prerequisites:
+	docker pull docker.io/docker/dockerfile:1.4
+	docker pull $(GO_CONTAINER_IMAGE)
+	docker pull gcr.io/distroless/static:latest
+
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
 # More info: https://docs.docker.com/develop/develop-images/build_enhancements/
 .PHONY: docker-build
-docker-build: ## Build docker image with the manager.
-	$(CONTAINER_TOOL) build -t ${IMG} .
+docker-build: docker-pull-prerequisites ## Build the docker image for controller-manager
+	DOCKER_BUILDKIT=1  docker build --pull --build-arg builder_image=$(GO_CONTAINER_IMAGE) --build-arg goproxy=$(GOPROXY) --build-arg ARCH=$(ARCH) --build-arg LDFLAGS="$(LDFLAGS)" . -t $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+	MANIFEST_IMG=$(CONTROLLER_IMG)-$(ARCH) MANIFEST_TAG=$(TAG) $(MAKE) set-manifest-image
+	$(MAKE) set-manifest-pull-policy
 
 .PHONY: docker-push
-docker-push: ## Push docker image with the manager.
-	$(CONTAINER_TOOL) push ${IMG}
+docker-push: ## Push the docker image
+	docker push $(CONTROLLER_IMG)-$(ARCH):$(TAG)
+
+##@ docker-all-arch:
 
 # PLATFORMS defines the target platforms for the manager image be built to provide support to multiple
 # architectures. (i.e. make docker-buildx IMG=myregistry/mypoperator:0.0.1). To use this option you need to:
@@ -211,66 +259,86 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	- $(CONTAINER_TOOL) buildx rm project-v3-builder
 	rm Dockerfile.cross
 
-##@ Deployment
+## --------------------------------------
+## Testing
+## --------------------------------------
 
-ifndef ignore-not-found
-  ignore-not-found = false
+ARTIFACTS ?= ${ROOT_DIR}/_artifacts
+
+KUBEBUILDER_ASSETS ?= $(shell $(SETUP_ENVTEST) use --use-env -p path $(KUBEBUILDER_ENVTEST_KUBERNETES_VERSION))
+
+.PHONY: test
+test: $(SETUP_ENVTEST) ## Run unit and integration tests
+	KUBEBUILDER_ASSETS="$(KUBEBUILDER_ASSETS)" go test ./... $(TEST_ARGS)
+
+.PHONY: test-verbose
+test-verbose: ## Run unit and integration tests with verbose flag
+	$(MAKE) test TEST_ARGS="$(TEST_ARGS) -v"
+
+.PHONY: test-cover
+test-cover: ## Run unit and integration tests and generate a coverage report
+	$(MAKE) test TEST_ARGS="$(TEST_ARGS) -coverprofile=out/coverage.out"
+	go tool cover -func=out/coverage.out -o out/coverage.txt
+	go tool cover -html=out/coverage.out -o out/coverage.html
+
+.PHONY: tilt-up
+tilt-up: ## Start tilt
+	tilt up
+
+## --------------------------------------
+## Release
+## --------------------------------------
+
+##@ release:
+## latest git tag for the commit, e.g., v0.3.10
+RELEASE_TAG ?= $(shell git describe --abbrev=0 2>/dev/null)
+ifneq (,$(findstring -,$(RELEASE_TAG)))
+    PRE_RELEASE=true
 endif
+# the previous release tag, e.g., v0.3.9, excluding pre-release tags
+PREVIOUS_TAG ?= $(shell git tag -l | grep -E "^v[0-9]+\.[0-9]+\.[0-9]+$$" | sort -V | grep -B1 $(RELEASE_TAG) | head -n 1 2>/dev/null)
+## set by Prow, ref name of the base branch, e.g., main
+RELEASE_ALIAS_TAG := $(PULL_BASE_REF)
+RELEASE_DIR := out
+USER_FORK ?= $(shell git config --get remote.origin.url | cut -d/ -f4)
+IMAGE_REVIEWERS ?= $(shell ./hack/get-project-maintainers.sh)
 
-.PHONY: install
-install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~/.kube/config.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) apply -f -
+$(RELEASE_DIR):
+	mkdir -p $(RELEASE_DIR)/
 
-.PHONY: uninstall
-uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+.PHONY: release
+release: clean-release ## Build and push container images using the latest git tag for the commit
+	@if [ -z "${RELEASE_TAG}" ]; then echo "RELEASE_TAG is not set"; exit 1; fi
+	@if ! [ -z "$$(git status --porcelain)" ]; then echo "Your local git repository contains uncommitted changes, use git clean before proceeding."; exit 1; fi
+	git checkout "${RELEASE_TAG}"
+	# Build binaries first.
+	# GIT_VERSION=$(RELEASE_TAG) $(MAKE) release-binaries
+	# Set the manifest image to the production bucket.
+	$(MAKE) manifest-modification REGISTRY=$(PROD_REGISTRY)
+	## Build the manifests
+	$(MAKE) release-manifests
+	# Set the development manifest image to the staging bucket.
+	# $(MAKE) manifest-modification-dev REGISTRY=$(STAGING_REGISTRY)
+	## Build the development manifests
+	# $(MAKE) release-manifests-dev
+	## Clean the git artifacts modified in the release process
+	$(MAKE) clean-release-git
 
-.PHONY: deploy
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
-	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+.PHONY: manifest-modification
+manifest-modification: # Set the manifest images to the staging/production bucket.
+	$(MAKE) set-manifest-image \
+		MANIFEST_IMG=$(CONTROLLER_IMG) MANIFEST_TAG=$(RELEASE_TAG) \
+		TARGET_RESOURCE="./config/default/manager_image_patch.yaml"
+	$(MAKE) set-manifest-pull-policy PULL_POLICY=IfNotPresent TARGET_RESOURCE="./config/default/manager_pull_policy.yaml"
 
-.PHONY: undeploy
-undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
-	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+.PHONY: release-manifests
+release-manifests: $(RELEASE_DIR) $(KUSTOMIZE) ## Build the manifests to publish with a release
+	# Build infrastructure-components.
+	$(KUSTOMIZE) build config/default > $(RELEASE_DIR)/infrastructure-components.yaml
+	$(MAKE) set-manifest-image MANIFEST_IMG=$(CONTROLLER_IMG) MANIFEST_TAG=$(TAG) TARGET_RESOURCE="$(RELEASE_DIR)/infrastructure-components.yaml"
 
-##@ Build Dependencies
-
-## Location to install dependencies to
-LOCALBIN ?= $(shell pwd)/bin
-$(LOCALBIN):
-	mkdir -p $(LOCALBIN)
-
-## Tool Binaries
-KUBECTL ?= kubectl
-KUSTOMIZE ?= $(LOCALBIN)/kustomize
-CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
-ENVTEST ?= $(LOCALBIN)/setup-envtest
-
-## Tool Versions
-KUSTOMIZE_VERSION ?= v5.2.1
-CONTROLLER_TOOLS_VERSION ?= v0.13.0
-
-.PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
-$(KUSTOMIZE): $(LOCALBIN)
-	@if test -x $(LOCALBIN)/kustomize && ! $(LOCALBIN)/kustomize version | grep -q $(KUSTOMIZE_VERSION); then \
-		echo "$(LOCALBIN)/kustomize version is not expected $(KUSTOMIZE_VERSION). Removing it before installing."; \
-		rm -rf $(LOCALBIN)/kustomize; \
-	fi
-	test -s $(LOCALBIN)/kustomize || GOBIN=$(LOCALBIN) GO111MODULE=on go install sigs.k8s.io/kustomize/kustomize/v5@$(KUSTOMIZE_VERSION)
-
-.PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
-$(CONTROLLER_GEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
-
-.PHONY: envtest
-envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
-$(ENVTEST): $(LOCALBIN)
-	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
-
+	# Add metadata to the release artifacts
+	cp metadata.yaml $(RELEASE_DIR)/metadata.yaml
 
 ## --------------------------------------
 ## Cleanup / Verification
@@ -298,17 +366,16 @@ clean-release-git: ## Restores the git files usually modified during a release
 	git restore ./*manager_image_patch.yaml ./*manager_pull_policy.yaml
 
 .PHONY: clean-generated-yaml
-clean-generated-yaml: ## Remove files generated by conversion-gen from the mentioned dirs. Example SRC_DIRS="./api/v1alpha4"
+clean-generated-yaml: ## Remove files generated by conversion-gen from the mentioned dirs. Example SRC_DIRS="./api/v1"
 	(IFS=','; for i in $(SRC_DIRS); do find $$i -type f -name '*.yaml' -exec rm -f {} \;; done)
 
 .PHONY: clean-generated-deepcopy
-clean-generated-deepcopy: ## Remove files generated by conversion-gen from the mentioned dirs. Example SRC_DIRS="./api/v1alpha4"
+clean-generated-deepcopy: ## Remove files generated by conversion-gen from the mentioned dirs. Example SRC_DIRS="./api/v1"
 	(IFS=','; for i in $(SRC_DIRS); do find $$i -type f -name 'zz_generated.deepcopy*' -exec rm -f {} \;; done)
 
 ## --------------------------------------
 ## Hack / Tools
 ## --------------------------------------
-
 ##@ hack/tools:
 
 .PHONY: $(CONTROLLER_GEN_BIN)
@@ -316,6 +383,9 @@ $(CONTROLLER_GEN_BIN): $(CONTROLLER_GEN) ## Build a local copy of controller-gen
 
 .PHONY: $(CONVERSION_GEN_BIN)
 $(CONVERSION_GEN_BIN): $(CONVERSION_GEN) ## Build a local copy of conversion-gen.
+
+.PHONY: $(GO_APIDIFF_BIN)
+$(GO_APIDIFF_BIN): $(GO_APIDIFF) ## Build a local copy of go-apidiff
 
 .PHONY: $(ENVSUBST_BIN)
 $(ENVSUBST_BIN): $(ENVSUBST) ## Build a local copy of envsubst.
@@ -355,8 +425,3 @@ $(GOLANGCI_LINT): # Download and install golangci-lint
 	hack/ensure-golangci-lint.sh \
 		-b $(TOOLS_BIN_DIR) \
 		$(GOLANGCI_LINT_VER)
-
-$(GH): # Download GitHub cli into the tools bin folder
-	hack/ensure-gh.sh \
-		-b $(TOOLS_BIN_DIR) \
-		$(GH_VERSION)
