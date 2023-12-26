@@ -1,0 +1,17 @@
+[
+  {
+    "name": "okr",
+    "image": "https://1block.ai/img/icon.png",
+    "config": {
+      "live_reload_deps": [
+        "main.go",
+        "go.mod",
+        "go.sum",
+        "api",
+        "internal",
+        "pkg"
+      ],
+      "label": "CAPOKR"
+    }
+  }
+]

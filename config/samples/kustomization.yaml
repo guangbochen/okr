@@ -1,0 +1,6 @@
+## Append samples of your project ##
+resources:
+- bootstrap_v1_ok3sconfig.yaml
+- bootstrap_v1_ok3s.yaml
+- controlplane_v1_ok3scontrolplane.yaml
+#+kubebuilder:scaffold:manifestskustomizesamples
