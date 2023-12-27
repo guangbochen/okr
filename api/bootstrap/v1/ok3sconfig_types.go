@@ -18,6 +18,17 @@ package v1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
+)
+
+const (
+	DataSecretAvailableCondition   clusterv1.ConditionType = "DataSecretAvailable"
+	CertificatesAvailableCondition clusterv1.ConditionType = "CertificatesAvailable"
+
+	WaitingForClusterInfrastructureReason = "WaitingForClusterInfrastructure"
+	DataSecretGenerationFailedReason      = "DataSecretGenerationFailed"
+	CertificatesGenerationFailedReason    = "CertificatesGenerationFailed"
+	CertificatesCorruptedReason           = "CertificatesCorrupted"
 )
 
 //+kubebuilder:object:root=true
@@ -174,8 +185,38 @@ type KThreesConfigStatus struct {
 
 // Ok3sConfigStatus defines the observed state of Ok3sConfig
 type Ok3sConfigStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
+	// Ready indicates the BootstrapData field is ready to be consumed
+	Ready bool `json:"ready,omitempty"`
+
+	BootstrapData []byte `json:"bootstrapData,omitempty"`
+
+	// DataSecretName is the name of the secret that stores the bootstrap data script.
+	// +optional
+	DataSecretName *string `json:"dataSecretName,omitempty"`
+
+	// FailureReason will be set on non-retryable errors
+	// +optional
+	FailureReason string `json:"failureReason,omitempty"`
+
+	// FailureMessage will be set on non-retryable errors
+	// +optional
+	FailureMessage string `json:"failureMessage,omitempty"`
+
+	// ObservedGeneration is the latest generation observed by the controller.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+
+	// Conditions defines current service state of the KThreesConfig.
+	// +optional
+	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
+}
+
+func (c *Ok3sConfig) GetConditions() clusterv1.Conditions {
+	return c.Status.Conditions
+}
+
+func (c *Ok3sConfig) SetConditions(conditions clusterv1.Conditions) {
+	c.Status.Conditions = conditions
 }
 
 //+kubebuilder:object:root=true

@@ -21,9 +21,6 @@ import (
 	"fmt"
 	"strings"
 
-	controlplanev1 "github.com/oneblock-ai/okr/api/controlplane/v1"
-	"github.com/oneblock-ai/okr/pkg/scope"
-	"github.com/oneblock-ai/okr/pkg/services"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -37,6 +34,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+
+	controlplanev1 "github.com/oneblock-ai/okr/api/controlplane/v1"
+	"github.com/oneblock-ai/okr/pkg/scope"
+	"github.com/oneblock-ai/okr/pkg/services"
 )
 
 // Reconciler reconciles a Ok3sControlPlane object
@@ -47,7 +48,7 @@ type Reconciler struct {
 }
 
 // SetupWithManager sets up the bootstrap with the Manager.
-func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Context, opts ctrl.Options) error {
+func (r *Reconciler) SetupWithManager(mgr ctrl.Manager, ctx context.Context) error {
 	logger := log.FromContext(ctx)
 
 	controlPlane := &controlplanev1.Ok3sControlPlane{}
