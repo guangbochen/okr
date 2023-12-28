@@ -328,7 +328,7 @@ create_env_file() {
     info "env: Creating environment file ${FILE_OKR_ENV}"
     $SUDO touch ${FILE_OKR_ENV}
     $SUDO chmod 0600 ${FILE_OKR_ENV}
-    env | grep '^RANCHERD_' | $SUDO tee ${FILE_OKR_ENV} >/dev/null
+    env | grep '^OKR_' | $SUDO tee ${FILE_OKR_ENV} >/dev/null
     env | grep -Ei '^(NO|HTTP|HTTPS)_PROXY' | $SUDO tee -a ${FILE_OKR_ENV} >/dev/null
 }
 

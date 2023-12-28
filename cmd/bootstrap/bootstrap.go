@@ -1,8 +1,6 @@
 package bootstrap
 
 import (
-	//cli "github.com/rancher/wrangler-cli"
-
 	"github.com/spf13/cobra"
 
 	"github.com/oneblock-ai/okr/pkg/okr"
@@ -12,7 +10,7 @@ func NewBootstrap() *cobra.Command {
 	b := Bootstrap{}
 	cmd := &cobra.Command{
 		Use:   "bootstrap [flags]",
-		Short: "Run Kubernetes and KubeRay cluster bootstrap",
+		Short: "Bootstrap a Kubernetes(k3s) and KubeRay cluster",
 		RunE:  b.Run,
 	}
 	b.init(cmd)

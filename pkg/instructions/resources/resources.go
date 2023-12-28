@@ -11,12 +11,11 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 
-	"github.com/oneblock-ai/okr/pkg/images"
-	"github.com/oneblock-ai/okr/pkg/utils"
-
 	"github.com/oneblock-ai/okr/pkg/config"
+	"github.com/oneblock-ai/okr/pkg/instructions/images"
 	"github.com/oneblock-ai/okr/pkg/kubectl"
 	"github.com/oneblock-ai/okr/pkg/self"
+	"github.com/oneblock-ai/okr/pkg/utils"
 )
 
 //const (
@@ -177,20 +176,21 @@ func GetBootstrapManifests(dataDir string) string {
 	return fmt.Sprintf("%s/bootstrapmanifests/okr.yaml", dataDir)
 }
 
-func ToInstruction(imageOverride, systemDefaultRegistry, k8sVersion, dataDir string) (*applyinator.OneTimeInstruction, error) {
+func ToInstruction(imageOverride, systemDefaultRegistry, k8sVersion, dataDir string) (*applyinator.PeriodicInstruction, error) {
 	bootstrap := GetBootstrapManifests(dataDir)
 	cmd, err := self.Self()
 	if err != nil {
 		return nil, fmt.Errorf("resolving location of %s: %w", os.Args[0], err)
 	}
-	return &applyinator.OneTimeInstruction{
+	return &applyinator.PeriodicInstruction{
 		CommonInstruction: applyinator.CommonInstruction{
 			Name:    "bootstrap",
 			Image:   images.GetInstallerImage(imageOverride, systemDefaultRegistry, k8sVersion),
-			Args:    []string{"retry", kubectl.Command(k8sVersion), "apply", "--validate=false", "-f", bootstrap},
+			Args:    []string{kubectl.Command(k8sVersion), "apply", "--validate='ignore'", "-f", bootstrap},
 			Command: cmd,
 			Env:     kubectl.Env(k8sVersion),
 		},
-		SaveOutput: true,
+		SaveStderrOutput: true,
+		PeriodSeconds:    15,
 	}, nil
 }

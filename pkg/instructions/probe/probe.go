@@ -57,11 +57,23 @@ var probes = map[string]prober.Probe{
 	},
 }
 
-func replaceRuntime(str string, runtime config.Runtime) string {
-	if !strings.Contains(str, "%s") {
-		return str
+func AllProbes(runtime config.Runtime) map[string]prober.Probe {
+	return replaceRuntimeForProbes(probes, runtime)
+}
+
+func ToInstruction() (*applyinator.OneTimeInstruction, error) {
+	cmd, err := self.Self()
+	if err != nil {
+		return nil, fmt.Errorf("fialed to resolve location of %s: %w", os.Args[0], err)
 	}
-	return fmt.Sprintf(str, runtime)
+	return &applyinator.OneTimeInstruction{
+		CommonInstruction: applyinator.CommonInstruction{
+			Name:    "probes",
+			Args:    []string{"probe"},
+			Command: cmd,
+		},
+		SaveOutput: true,
+	}, nil
 }
 
 func ProbesForJoin(cfg *config.RuntimeConfig) map[string]prober.Probe {
@@ -71,10 +83,6 @@ func ProbesForJoin(cfg *config.RuntimeConfig) map[string]prober.Probe {
 	return replaceRuntimeForProbes(map[string]prober.Probe{
 		"kubelet": probes["kubelet"],
 	}, config.RuntimeUnknown)
-}
-
-func AllProbes(runtime config.Runtime) map[string]prober.Probe {
-	return replaceRuntimeForProbes(probes, runtime)
 }
 
 func replaceRuntimeForProbes(probes map[string]prober.Probe, runtime config.Runtime) map[string]prober.Probe {
@@ -94,17 +102,9 @@ func replaceRuntimeForProbes(probes map[string]prober.Probe, runtime config.Runt
 	return result
 }
 
-func ToInstruction() (*applyinator.OneTimeInstruction, error) {
-	cmd, err := self.Self()
-	if err != nil {
-		return nil, fmt.Errorf("fialed to resolve location of %s: %w", os.Args[0], err)
+func replaceRuntime(str string, runtime config.Runtime) string {
+	if !strings.Contains(str, "%s") {
+		return str
 	}
-	return &applyinator.OneTimeInstruction{
-		CommonInstruction: applyinator.CommonInstruction{
-			Name:    "probes",
-			Args:    []string{"probe"},
-			Command: cmd,
-		},
-		SaveOutput: true,
-	}, nil
+	return fmt.Sprintf(str, runtime)
 }

@@ -8,7 +8,7 @@ import (
 	"github.com/rancher/wrangler/v2/pkg/yaml"
 
 	"github.com/oneblock-ai/okr/pkg/config"
-	"github.com/oneblock-ai/okr/pkg/runtime"
+	"github.com/oneblock-ai/okr/pkg/instructions/runtime"
 	"github.com/oneblock-ai/okr/pkg/versions"
 )
 

@@ -9,11 +9,11 @@ import (
 	"github.com/oneblock-ai/okr/pkg/cacerts"
 	"github.com/oneblock-ai/okr/pkg/config"
 	"github.com/oneblock-ai/okr/pkg/discovery"
+	"github.com/oneblock-ai/okr/pkg/instructions/probe"
+	"github.com/oneblock-ai/okr/pkg/instructions/resources"
+	"github.com/oneblock-ai/okr/pkg/instructions/runtime"
 	"github.com/oneblock-ai/okr/pkg/join"
 	"github.com/oneblock-ai/okr/pkg/kubectl"
-	"github.com/oneblock-ai/okr/pkg/probe"
-	"github.com/oneblock-ai/okr/pkg/resources"
-	"github.com/oneblock-ai/okr/pkg/runtime"
 	"github.com/oneblock-ai/okr/pkg/versions"
 )
 
@@ -55,15 +55,15 @@ func toJoinPlan(cfg *config.Config, dataDir string) (*applyinator.Plan, error) {
 	if err := plan.addFile(join.ToScriptFile(cfg, dataDir)); err != nil {
 		return nil, err
 	}
-	if err := plan.addInstruction(cacerts.ToUpdateCACertificatesInstruction()); err != nil {
-		return nil, err
-	}
-	if err := plan.addInstruction(join.ToInstruction(cfg, dataDir)); err != nil {
-		return nil, err
-	}
-	if err := plan.addInstruction(probe.ToInstruction()); err != nil {
-		return nil, err
-	}
+	//if err := plan.addInstruction(cacerts.ToUpdateCACertificatesInstruction()); err != nil {
+	//	return nil, err
+	//}
+	//if err := plan.addInstruction(join.ToInstruction(cfg, dataDir)); err != nil {
+	//	return nil, err
+	//}
+	//if err := plan.addInstruction(probe.ToInstruction()); err != nil {
+	//	return nil, err
+	//}
 	if err := plan.addProbesForJoin(cfg); err != nil {
 		return nil, err
 	}
@@ -88,61 +88,20 @@ func (p *plan) addInstructions(cfg *config.Config, dataDir string) error {
 		return err
 	}
 
-	if err := p.addInstruction(runtime.ToInstruction(cfg.RuntimeInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
+	// add runtime instruction, e.g., k3s
+	if err := p.addOneTimeInstruction(runtime.ToInstruction(cfg.RuntimeInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
 		return err
 	}
 
-	if err := p.addInstruction(probe.ToInstruction()); err != nil {
+	// add probe instruction
+	if err := p.addOneTimeInstruction(probe.ToInstruction()); err != nil {
 		return err
 	}
 
-	//rancherVersion, err := versions.RancherVersion(cfg.RancherVersion)
-	//if err != nil {
-	//	return err
-	//}
-	//if err := p.addInstruction(rancher.ToInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion, rancherVersion, dataDir)); err != nil {
-	//	return err
-	//}
-
-	//if err := p.addInstruction(rancher.ToWaitRancherInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
-	//
-	//if err := p.addInstruction(rancher.ToWaitRancherWebhookInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
-	//
-	//if err := p.addInstruction(rancher.ToWaitClusterClientSecretInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
-	//
-	//if err := p.addInstruction(rancher.ToScaleDownFleetControllerInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
-	//
-	//if err := p.addInstruction(rancher.ToUpdateClientSecretInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
-	//
-	//if err := p.addInstruction(rancher.ToScaleUpFleetControllerInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
-
-	if err := p.addInstruction(resources.ToInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion, dataDir)); err != nil {
+	// add resource instruction
+	if err := p.addPeriodInstruction(resources.ToInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion, dataDir)); err != nil {
 		return err
 	}
-
-	//if err := p.addInstruction(rancher.ToWaitSUCInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
-	//
-	//if err := p.addInstruction(rancher.ToWaitSUCPlanInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
-
-	//if err := p.addInstruction(runtime.ToWaitKubernetesInstruction(cfg.RuntimeInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
-	//	return err
-	//}
 
 	p.addPrePostInstructions(cfg, k8sVersion)
 	return nil
@@ -151,7 +110,7 @@ func (p *plan) addInstructions(cfg *config.Config, dataDir string) error {
 func (p *plan) addPrePostInstructions(cfg *config.Config, k8sVersion string) {
 	var instructions []applyinator.OneTimeInstruction
 
-	for _, inst := range cfg.PreInstructions {
+	for _, inst := range cfg.PreOneTimeInstructions {
 		if k8sVersion != "" {
 			inst.Env = append(inst.Env, kubectl.Env(k8sVersion)...)
 		}
@@ -160,7 +119,7 @@ func (p *plan) addPrePostInstructions(cfg *config.Config, k8sVersion string) {
 
 	instructions = append(instructions, p.OneTimeInstructions...)
 
-	for _, inst := range cfg.PostInstructions {
+	for _, inst := range cfg.PostOneTimeInstructions {
 		inst.Env = append(inst.Env, kubectl.Env(k8sVersion)...)
 		instructions = append(instructions, inst)
 	}
@@ -169,12 +128,21 @@ func (p *plan) addPrePostInstructions(cfg *config.Config, k8sVersion string) {
 	return
 }
 
-func (p *plan) addInstruction(instruction *applyinator.OneTimeInstruction, err error) error {
+func (p *plan) addOneTimeInstruction(instruction *applyinator.OneTimeInstruction, err error) error {
 	if err != nil || instruction == nil {
 		return err
 	}
 
 	p.OneTimeInstructions = append(p.OneTimeInstructions, *instruction)
+	return nil
+}
+
+func (p *plan) addPeriodInstruction(instruction *applyinator.PeriodicInstruction, err error) error {
+	if err != nil || instruction == nil {
+		return err
+	}
+
+	p.PeriodicInstructions = append(p.PeriodicInstructions, *instruction)
 	return nil
 }
 
@@ -193,9 +161,9 @@ func (p *plan) addFiles(cfg *config.Config, dataDir string) error {
 
 	// TODO: remove as we include cluster-init config in the above addFile
 	// bootstrap config.yaml
-	//if err := p.addFile(runtime.ToBootstrapFile(runtimeName)); err != nil {
-	//	return err
-	//}
+	if err := p.addFile(runtime.ToBootstrapFile(runtimeName)); err != nil {
+		return err
+	}
 
 	// registries.yaml
 	//if err := p.addFile(registry.ToFile(cfg.Registries, runtimeName)); err != nil {

@@ -50,7 +50,7 @@ func RunProbes(ctx context.Context, planFile string, interval time.Duration) err
 				if probeStatus.Healthy {
 					logrus.Infof("Probe [%s] is healthy", probeName)
 				} else {
-					logrus.Infof("Probe [%s] is unhealthy", probeName)
+					logrus.Warnf("Probe [%s] is unhealthy", probeName)
 				}
 			}
 		}

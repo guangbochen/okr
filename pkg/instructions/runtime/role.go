@@ -2,6 +2,7 @@ package runtime
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -22,21 +23,21 @@ import (
 //	}
 //)
 
-//func ToBootstrapFile(runtime config.Runtime) (*applyinator.File, error) {
-//	if runtime != config.RuntimeK3S {
-//		return nil, nil
-//	}
-//	data, err := json.Marshal(map[string]interface{}{
-//		"cluster-init": "true",
-//	})
-//	if err != nil {
-//		return nil, err
-//	}
-//	return &applyinator.File{
-//		Content: base64.StdEncoding.EncodeToString(data),
-//		Path:    GetRancherConfigLocation(runtime),
-//	}, nil
-//}
+func ToBootstrapFile(runtime config.Runtime) (*applyinator.File, error) {
+	if runtime != config.RuntimeK3S {
+		return nil, nil
+	}
+	data, err := json.Marshal(map[string]interface{}{
+		"cluster-init": "true",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &applyinator.File{
+		Content: base64.StdEncoding.EncodeToString(data),
+		Path:    GetRancherConfigLocation(runtime),
+	}, nil
+}
 
 func ToFile(config *config.RuntimeConfig, runtime config.Runtime, clusterInit bool) (*applyinator.File, error) {
 	data, err := ToConfig(config, clusterInit)
@@ -91,6 +92,6 @@ func GetKubeRuntimeConfigLocation(runtime config.Runtime) string {
 	return fmt.Sprintf("/etc/rancher/%s/config.yaml.d/40-okr.yaml", runtime)
 }
 
-//func GetRancherConfigLocation(runtime config.Runtime) string {
-//	return fmt.Sprintf("/etc/rancher/%s/config.yaml.d/50-rancher.yaml", runtime)
-//}
+func GetRancherConfigLocation(runtime config.Runtime) string {
+	return fmt.Sprintf("/etc/rancher/%s/config.yaml.d/50-rancher.yaml", runtime)
+}

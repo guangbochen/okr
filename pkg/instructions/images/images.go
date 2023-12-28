@@ -11,10 +11,6 @@ const (
 	defaultSystemImagePrefix = "rancher/system-agent-installer"
 )
 
-func GetRancherInstallerImage(imageOverride, imagePrefix, rancherVersion string) string {
-	return getInstallerImage(imageOverride, imagePrefix, "rancher", rancherVersion)
-}
-
 func GetInstallerImage(imageOverride, imagePrefix, kubernetesVersion string) string {
 	return getInstallerImage(imageOverride, imagePrefix, string(config.GetRuntime(kubernetesVersion)), kubernetesVersion)
 }

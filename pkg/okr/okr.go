@@ -44,6 +44,7 @@ func New(cfg Config) *OKR {
 		cfg: cfg,
 	}
 }
+
 func (o *OKR) Run(ctx context.Context) error {
 	if done, err := o.done(); err != nil {
 		return fmt.Errorf("checking done stamp [%s]: %w", o.DoneStamp(), err)
@@ -77,7 +78,7 @@ func (o *OKR) execute(ctx context.Context) error {
 	}
 
 	if cfg.Role == "" {
-		logrus.Infof("No role defined, skipping bootstrap")
+		logrus.Warn("No role defined, skipping bootstrap")
 		return nil
 	}
 
@@ -86,7 +87,7 @@ func (o *OKR) execute(ctx context.Context) error {
 		return err
 	}
 
-	logrus.Infof("Bootstrapping k3s (%s)", k8sVersion)
+	logrus.Infof("Bootstrapping Kubernetes (%s)", k8sVersion)
 
 	nodePlan, err := plan.ToPlan(ctx, &cfg, o.cfg.DataDir)
 	if err != nil {
@@ -101,7 +102,7 @@ func (o *OKR) execute(ctx context.Context) error {
 		return err
 	}
 
-	logrus.Infof("Successfully Bootstrapped k3s (%s)", k8sVersion)
+	logrus.Infof("Successfully Bootstrapped Kubernetes (%s)", k8sVersion)
 	return nil
 }
 

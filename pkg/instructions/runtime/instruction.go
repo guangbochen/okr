@@ -4,7 +4,7 @@ import (
 	"github.com/rancher/system-agent/pkg/applyinator"
 
 	"github.com/oneblock-ai/okr/pkg/config"
-	"github.com/oneblock-ai/okr/pkg/images"
+	"github.com/oneblock-ai/okr/pkg/instructions/images"
 )
 
 func ToInstruction(imageOverride string, systemDefaultRegistry string, k8sVersion string) (*applyinator.OneTimeInstruction, error) {

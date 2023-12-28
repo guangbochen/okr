@@ -29,24 +29,16 @@ import (
 
 var (
 	implicitPaths = []string{
-		"/usr/share/oem/oneblock/okr/config.yaml",
-		"/usr/share/oneblock/okr/config.yaml",
-		// RancherOS userdata
-		"/oem/userdata",
-		// RancherOS installation yip config
-		"/oem/99_custom.yaml",
-		// RancherOS oem location
-		"/oem/rancher/rancherd/config.yaml",
+		"/usr/share/oem/oneblock-ai/okr/config.yaml",
+		"/usr/share/oneblock-ai/okr/config.yaml",
 		// Standard cloud-config
 		"/var/lib/cloud/instance/user-data.txt",
 	}
 
 	manifests = []string{
-		"/usr/share/oem/oneblock/rancherd/manifests",
-		"/usr/share/rancher/rancherd/manifests",
-		"/etc/rancher/rancherd/manifests",
-		// RancherOS OEM
-		"/oem/rancher/rancherd/manifests",
+		"/usr/share/oem/oneblock-ai/okr/manifests",
+		"/usr/share/oneblock-ai/okr/manifests",
+		"/etc/oneblock-ai/okr/manifests",
 	}
 )
 
@@ -56,9 +48,9 @@ type Config struct {
 	Server            string           `json:"server,omitempty"`
 	Discovery         *DiscoveryConfig `json:"discovery,omitempty"`
 
-	PreInstructions  []applyinator.OneTimeInstruction `json:"preInstructions,omitempty"`
-	PostInstructions []applyinator.OneTimeInstruction `json:"postInstructions,omitempty"`
-	Resources        []utils.GenericMap               `json:"resources,omitempty"`
+	PreOneTimeInstructions  []applyinator.OneTimeInstruction `json:"preInstructions,omitempty"`
+	PostOneTimeInstructions []applyinator.OneTimeInstruction `json:"postInstructions,omitempty"`
+	Resources               []utils.GenericMap               `json:"resources,omitempty"`
 
 	RuntimeInstallerImage string `json:"runtimeInstallerImage,omitempty"`
 	RancherInstallerImage string `json:"rancherInstallerImage,omitempty"`
@@ -69,7 +61,7 @@ type Config struct {
 type DiscoveryConfig struct {
 	Params          map[string]string `json:"params,omitempty"`
 	ExpectedServers int               `json:"expectedServers,omitempty"`
-	// ServerCacheDuration will remember discovered servers for this amount of time.  This
+	// ServerCacheDuration will remember discovered servers for this amount of time. This
 	// helps with some discovery protocols like mDNS that can be unreliable
 	ServerCacheDuration string `json:"serverCacheDuration,omitempty"`
 }
@@ -104,7 +96,7 @@ func Load(path string) (result Config, err error) {
 		if err == nil {
 			values = newValues
 		} else {
-			logrus.Info("failed to parse %s, skipping file: %v", file, err)
+			logrus.Warnf("failed to parse %s, skipping file: %v", file, err)
 		}
 	}
 
@@ -120,7 +112,7 @@ func Load(path string) (result Config, err error) {
 		return
 	}
 
-	return processRemote(result)
+	return result, err
 }
 
 func populatedSystemResources(config *Config) error {
@@ -202,7 +194,7 @@ func mergeFile(result map[string]interface{}, file string) (map[string]interface
 		}
 	}
 
-	if v, ok := values["rancherd"].(map[string]interface{}); ok {
+	if v, ok := values["okr"].(map[string]interface{}); ok {
 		values = v
 	}
 
