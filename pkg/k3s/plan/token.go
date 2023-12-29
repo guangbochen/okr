@@ -7,12 +7,12 @@ import (
 	"github.com/rancher/wrangler/v2/pkg/randomtoken"
 	"github.com/rancher/wrangler/v2/pkg/yaml"
 
-	"github.com/oneblock-ai/okr/pkg/config"
-	"github.com/oneblock-ai/okr/pkg/instructions/runtime"
-	"github.com/oneblock-ai/okr/pkg/versions"
+	config2 "github.com/oneblock-ai/okr/pkg/k3s/config"
+	"github.com/oneblock-ai/okr/pkg/k3s/instructions/runtime"
+	"github.com/oneblock-ai/okr/pkg/k3s/versions"
 )
 
-func assignTokenIfUnset(cfg *config.Config) error {
+func assignTokenIfUnset(cfg *config2.Config) error {
 	if cfg.Token != "" {
 		return nil
 	}
@@ -32,13 +32,13 @@ func assignTokenIfUnset(cfg *config.Config) error {
 	return nil
 }
 
-func existingToken(cfg *config.Config) (string, error) {
+func existingToken(cfg *config2.Config) (string, error) {
 	k8sVersion, err := versions.K8sVersion(cfg.KubernetesVersion)
 	if err != nil {
 		return "", err
 	}
 
-	cfgFile := runtime.GetKubeRuntimeConfigLocation(config.GetRuntime(k8sVersion))
+	cfgFile := runtime.GetKubeRuntimeConfigLocation(config2.GetRuntime(k8sVersion))
 	data, err := os.ReadFile(cfgFile)
 	if os.IsNotExist(err) {
 		return "", nil

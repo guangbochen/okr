@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/oneblock-ai/okr/pkg/instructions/probe"
+	"github.com/oneblock-ai/okr/pkg/k3s/instructions/probe"
 )
 
 func NewProbe() *cobra.Command {

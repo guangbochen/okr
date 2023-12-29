@@ -7,22 +7,11 @@ import (
 	"strings"
 
 	"github.com/rancher/system-agent/pkg/applyinator"
-	"github.com/sirupsen/logrus"
-
-	//v1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
-	//"github.com/rancher/system-agent/pkg/applyinator"
-	//"github.com/rancher/wharfie/pkg/registries"
+	"github.com/rancher/wharfie/pkg/registries"
 	"github.com/rancher/wrangler/v2/pkg/data"
 	"github.com/rancher/wrangler/v2/pkg/data/convert"
 	"github.com/rancher/wrangler/v2/pkg/yaml"
-	//"github.com/sirupsen/logrus"
-	//v1 "github.com/rancher/rancher/pkg/apis/rke.cattle.io/v1"
-	//"github.com/rancher/system-agent/pkg/applyinator"
-	//"github.com/rancher/wharfie/pkg/registries"
-	//"github.com/rancher/wrangler/pkg/data"
-	//"github.com/rancher/wrangler/pkg/data/convert"
-	//"github.com/rancher/wrangler/pkg/yaml"
-	//"github.com/sirupsen/logrus"
+	"github.com/sirupsen/logrus"
 
 	"github.com/oneblock-ai/okr/pkg/utils"
 )
@@ -44,26 +33,15 @@ var (
 
 type Config struct {
 	RuntimeConfig
-	KubernetesVersion string           `json:"kubernetesVersion,omitempty"`
-	Server            string           `json:"server,omitempty"`
-	Discovery         *DiscoveryConfig `json:"discovery,omitempty"`
+	KubernetesVersion string `json:"kubernetesVersion,omitempty"`
 
 	PreOneTimeInstructions  []applyinator.OneTimeInstruction `json:"preInstructions,omitempty"`
 	PostOneTimeInstructions []applyinator.OneTimeInstruction `json:"postInstructions,omitempty"`
 	Resources               []utils.GenericMap               `json:"resources,omitempty"`
 
-	RuntimeInstallerImage string `json:"runtimeInstallerImage,omitempty"`
-	RancherInstallerImage string `json:"rancherInstallerImage,omitempty"`
-	SystemDefaultRegistry string `json:"systemDefaultRegistry,omitempty"`
-	//Registries            *registry.Registry `json:"registries,omitempty"`
-}
-
-type DiscoveryConfig struct {
-	Params          map[string]string `json:"params,omitempty"`
-	ExpectedServers int               `json:"expectedServers,omitempty"`
-	// ServerCacheDuration will remember discovered servers for this amount of time. This
-	// helps with some discovery protocols like mDNS that can be unreliable
-	ServerCacheDuration string `json:"serverCacheDuration,omitempty"`
+	RuntimeInstallerImage string               `json:"runtimeInstallerImage,omitempty"`
+	SystemDefaultRegistry string               `json:"systemDefaultRegistry,omitempty"`
+	Registries            *registries.Registry `json:"registries,omitempty"`
 }
 
 func paths() (result []string) {

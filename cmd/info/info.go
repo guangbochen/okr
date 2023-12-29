@@ -19,9 +19,9 @@ type Info struct {
 }
 
 func (b *Info) Run(cmd *cobra.Command, args []string) error {
-	r := okr.New(okr.Config{
+	o := okr.New(okr.Config{
 		DataDir:    okr.DefaultDataDir,
 		ConfigPath: okr.DefaultConfigFile,
 	})
-	return r.Run(cmd.Context())
+	return o.Info(cmd.Context())
 }

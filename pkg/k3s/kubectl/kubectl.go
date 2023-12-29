@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/oneblock-ai/okr/pkg/config"
+	"github.com/oneblock-ai/okr/pkg/k3s/config"
 )
+
+const kubectlDefault = "/usr/local/bin/kubectl"
 
 var kubeconfigs = []string{
 	"/etc/rancher/k3s/k3s.yaml",
@@ -13,18 +15,20 @@ var kubeconfigs = []string{
 
 func Env(k8sVersion string) []string {
 	runtime := config.GetRuntime(k8sVersion)
+	if runtime == config.RuntimeUnknown {
+		return []string{}
+	}
 	return []string{
-		fmt.Sprintf("KUBECONFIG=/etc/oneblock-ai/%s/%s.yaml", runtime, runtime),
+		fmt.Sprintf("KUBECONFIG=/etc/rancher/%s/%s.yaml", runtime, runtime),
 	}
 }
 
 func Command(k8sVersion string) string {
-	kubectl := "/usr/local/bin/kubectl"
-	//runtime := config.GetRuntime(k8sVersion)
-	////if runtime == config.RuntimeRKE2 {
-	//	kubectl = "/var/lib/rancher/rke2/bin/kubectl"
-	//}
-	return kubectl
+	runtime := config.GetRuntime(k8sVersion)
+	if runtime == config.RuntimeK3S {
+		return kubectlDefault
+	}
+	return "kubectl"
 }
 
 func GetKubeconfig(kubeconfig string) (string, error) {

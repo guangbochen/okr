@@ -1,5 +1,8 @@
 # OKR
-Open K3s Ray(OKR) is a k8s cluster API bootstrap and control-plane provider to install k3s and KubRay on any infrastructures.
+OKR(Open Kubernetes with Ray) helps to bootstrap a k8s cluster with k3s and KubRay on any infrastructures.
+
+> **NOTE**: This is an experimental project and is not intended for production use.
+> This project is referred to [rancherd](https://github.com/rancher/rancherd) and [cluster-api-k3s](https://github.com/cluster-api-provider-k3s/cluster-api-k3s/) projects.
 
 ## Description
 // TODO(user): An in-depth paragraph about your project and overview of use

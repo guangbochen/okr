@@ -5,22 +5,23 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/oneblock-ai/okr/pkg/retry"
+	"github.com/oneblock-ai/okr/pkg/k3s/retry"
 )
 
 func NewRetry() *cobra.Command {
 	r := &Retry{}
 	cmd := &cobra.Command{
-		Use:   "retry",
-		Short: "Retry command until it succeeds",
-		RunE:  r.Run,
+		Use:                "retry",
+		Short:              "Retry command until it succeeds",
+		Hidden:             true,
+		DisableFlagParsing: true,
+		RunE:               r.Run,
 	}
-	r.init(cmd)
 	return cmd
 }
 
 type Retry struct {
-	SleepFirst bool
+	SleepFirst bool `usage:"Sleep 5 seconds before running command"`
 }
 
 func (p *Retry) Run(cmd *cobra.Command, args []string) error {
@@ -28,9 +29,4 @@ func (p *Retry) Run(cmd *cobra.Command, args []string) error {
 		time.Sleep(5 * time.Second)
 	}
 	return retry.Retry(cmd.Context(), 15*time.Second, args)
-}
-
-func (p *Retry) init(apiCmd *cobra.Command) {
-	f := apiCmd.Flags()
-	f.BoolVar(&p.SleepFirst, "s", false, "Sleep 5 seconds before running command")
 }

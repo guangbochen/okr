@@ -10,10 +10,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"sigs.k8s.io/yaml"
 
-	"github.com/oneblock-ai/okr/pkg/config"
-	"github.com/oneblock-ai/okr/pkg/plan"
-	"github.com/oneblock-ai/okr/pkg/version"
-	"github.com/oneblock-ai/okr/pkg/versions"
+	"github.com/oneblock-ai/okr/pkg/k3s/config"
+	plan2 "github.com/oneblock-ai/okr/pkg/k3s/plan"
+	"github.com/oneblock-ai/okr/pkg/k3s/versions"
 )
 
 const (
@@ -89,12 +88,12 @@ func (o *OKR) execute(ctx context.Context) error {
 
 	logrus.Infof("Bootstrapping Kubernetes (%s)", k8sVersion)
 
-	nodePlan, err := plan.ToPlan(ctx, &cfg, o.cfg.DataDir)
+	nodePlan, err := plan2.ToPlan(ctx, &cfg, o.cfg.DataDir)
 	if err != nil {
 		return fmt.Errorf("generating plan: %w", err)
 	}
 
-	if err := plan.Run(ctx, &cfg, nodePlan, o.cfg.DataDir); err != nil {
+	if err := plan2.Run(ctx, &cfg, nodePlan, o.cfg.DataDir); err != nil {
 		return fmt.Errorf("running plan: %w", err)
 	}
 
@@ -151,15 +150,6 @@ func (o *OKR) DoneStamp() string {
 
 func (o *OKR) WorkingStamp() string {
 	return filepath.Join(o.cfg.DataDir, "working")
-}
-
-func (o *OKR) Infof(ctx context.Context) error {
-	k8sVersion, kubeRayVersion := o.getExistingVersions(ctx)
-
-	logrus.Infof("Kubernetes version: %s\n", k8sVersion)
-	logrus.Infof("KubeRay version: %s\n", kubeRayVersion)
-	logrus.Infof("OKR version: %s\n\n", version.FriendlyVersion())
-	return nil
 }
 
 func (o *OKR) Upgrade(ctx context.Context, upgradeConfig UpgradeConfig) error {

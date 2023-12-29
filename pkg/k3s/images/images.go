@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/oneblock-ai/okr/pkg/config"
+	"github.com/oneblock-ai/okr/pkg/k3s/config"
 )
 
 const (

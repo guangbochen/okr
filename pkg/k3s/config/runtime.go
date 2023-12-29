@@ -10,6 +10,7 @@ var (
 type Runtime string
 
 type RuntimeConfig struct {
+	Server          string                 `json:"server,omitempty"`
 	Role            string                 `json:"role,omitempty"`
 	SANS            []string               `json:"tlsSans,omitempty"`
 	NodeName        string                 `json:"nodeName,omitempty"`

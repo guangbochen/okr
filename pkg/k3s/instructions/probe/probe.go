@@ -8,9 +8,9 @@ import (
 	"github.com/rancher/system-agent/pkg/applyinator"
 	"github.com/rancher/system-agent/pkg/prober"
 
-	"github.com/oneblock-ai/okr/pkg/config"
-	"github.com/oneblock-ai/okr/pkg/roles"
-	"github.com/oneblock-ai/okr/pkg/self"
+	"github.com/oneblock-ai/okr/pkg/k3s/config"
+	"github.com/oneblock-ai/okr/pkg/k3s/instructions/roles"
+	"github.com/oneblock-ai/okr/pkg/k3s/self"
 )
 
 var probes = map[string]prober.Probe{

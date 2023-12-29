@@ -5,13 +5,13 @@ import (
 	"fmt"
 
 	"github.com/rancher/system-agent/pkg/applyinator"
-	//"github.com/rancher/wharfie/pkg/registries"
+	"github.com/rancher/wharfie/pkg/registries"
 	"sigs.k8s.io/yaml"
 
-	"github.com/oneblock-ai/okr/pkg/config"
+	"github.com/oneblock-ai/okr/pkg/k3s/config"
 )
 
-func ToFile(registry *Registry, runtime config.Runtime) (*applyinator.File, error) {
+func ToFile(registry *registries.Registry, runtime config.Runtime) (*applyinator.File, error) {
 	if registry == nil {
 		return nil, nil
 	}

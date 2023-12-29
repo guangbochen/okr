@@ -28,7 +28,7 @@ preInstructions:
   - arg2
   # Command to run
   command: /bin/dosomething
-  # Save output to /var/lib/rancher/rancherd/plan/plan-output.json
+  # Save output to /var/lib/oneblock-ai/okr/plan/plan-output.json
   saveOutput: false
 
 # Generic commands to run after bootstrapping the node.
@@ -42,7 +42,7 @@ postInstructions:
   command: /bin/dosomething
   saveOutput: false
 
-# Kubernetes resources that will be created once Rancher is bootstrapped
+# Kubernetes resources that will be created once k3s is bootstrapped
 resources:
 - kind: ConfigMap
   apiVersion: v1
@@ -55,43 +55,23 @@ resources:
 # is documented at https://rancher.com/docs/k3s/latest/en/installation/private-registry/
 registries: {}
 
-# The default registry used for all Rancher container images. For more information
+# The default registry used for all container images. For more information
 # refer to https://rancher.com/docs/rancher/v2.6/en/admin-settings/config-private-registry/
 systemDefaultRegistry: someprefix.example.com:5000
 
 # Advanced: The system agent installer image used for Kubernetes
 runtimeInstallerImage: ...
 
-# Advanced: The system agent installer image used for Rancher
-rancherInstallerImage: ...
-
 ###########################################
 # The below parameters apply to all roles #
 ###########################################
 
-# The URL to Rancher to join a node. If you have disabled the hostPort and configured
+# The URL to cluster to join a node. If you have disabled the hostPort and configured
 # TLS then this will be the server you have setup.
-server: https://myserver.example.com:8443
+server: https://myserver.example.com:6443
 
 # A shared secret to join nodes to the cluster
 token: sometoken
-
-# Instead of setting the server parameter above the server value can be dynamically
-# determined from cloud provider metadata. This is powered by https://github.com/hashicorp/go-discover.
-# Discovery requires that the hostPort is not disabled.
-discovery:
-  params:
-    # Corresponds to go-discover provider name
-    provider: "mdns"
-    # All other key/values are parameters corresponding to what
-    # the go-discover provider is expecting
-    service: "rancher-server"
-  # If this is a new cluster it will wait until 3 server are
-  # available and they all agree on the same cluster-init node
-  expectedServers: 3
-  # How long servers are remembered for. It is useful for providers
-  # that are not consistent in their responses, like mdns.
-  serverCacheDuration: 1m
 
 # The role of this node.  Every cluster must start with one node as role=cluster-init.
 # After that nodes can be joined using the server role for control-plane nodes and
@@ -111,5 +91,5 @@ taints:
 labels:
 - key=value
 
-# Advanced: Arbitrary configuration that will be placed in /etc/rancher/k3s/config.yaml.d/40-rancherd.yaml
+# Advanced: Arbitrary configuration that will be placed in /etc/rancher/k3s/config.yaml.d/40-okr.yaml
 extraConfig: {}

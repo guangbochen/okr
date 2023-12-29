@@ -13,12 +13,12 @@ import (
 	"github.com/rancher/system-agent/pkg/image"
 	"github.com/sirupsen/logrus"
 
-	"github.com/oneblock-ai/okr/pkg/config"
-	"github.com/oneblock-ai/okr/pkg/registry"
-	"github.com/oneblock-ai/okr/pkg/versions"
+	config2 "github.com/oneblock-ai/okr/pkg/k3s/config"
+	"github.com/oneblock-ai/okr/pkg/k3s/registry"
+	"github.com/oneblock-ai/okr/pkg/k3s/versions"
 )
 
-func Run(ctx context.Context, cfg *config.Config, plan *applyinator.Plan, dataDir string) error {
+func Run(ctx context.Context, cfg *config2.Config, plan *applyinator.Plan, dataDir string) error {
 	k8sVersion, err := versions.K8sVersion(cfg.KubernetesVersion)
 	if err != nil {
 		return err
@@ -27,7 +27,7 @@ func Run(ctx context.Context, cfg *config.Config, plan *applyinator.Plan, dataDi
 }
 
 func RunWithKubernetesVersion(ctx context.Context, k8sVersion string, plan *applyinator.Plan, dataDir string) error {
-	runtime := config.GetRuntime(k8sVersion)
+	runtime := config2.GetRuntime(k8sVersion)
 
 	if err := writePlan(plan, dataDir); err != nil {
 		return err
@@ -42,8 +42,8 @@ func RunWithKubernetesVersion(ctx context.Context, k8sVersion string, plan *appl
 			Plan: *plan,
 		},
 		RunOneTimeInstructions:     true,
-		ReconcileFiles:             true,
 		OneTimeInstructionAttempts: 5,
+		ReconcileFiles:             true,
 	})
 	if err != nil {
 		return err

@@ -6,20 +6,18 @@ import (
 
 	"github.com/rancher/system-agent/pkg/applyinator"
 
-	"github.com/oneblock-ai/okr/pkg/cacerts"
-	"github.com/oneblock-ai/okr/pkg/config"
-	"github.com/oneblock-ai/okr/pkg/discovery"
-	"github.com/oneblock-ai/okr/pkg/instructions/probe"
-	"github.com/oneblock-ai/okr/pkg/instructions/resources"
-	"github.com/oneblock-ai/okr/pkg/instructions/runtime"
-	"github.com/oneblock-ai/okr/pkg/join"
-	"github.com/oneblock-ai/okr/pkg/kubectl"
-	"github.com/oneblock-ai/okr/pkg/versions"
+	config2 "github.com/oneblock-ai/okr/pkg/k3s/config"
+	"github.com/oneblock-ai/okr/pkg/k3s/instructions/probe"
+	"github.com/oneblock-ai/okr/pkg/k3s/instructions/resources"
+	runtime2 "github.com/oneblock-ai/okr/pkg/k3s/instructions/runtime"
+	"github.com/oneblock-ai/okr/pkg/k3s/kubectl"
+	"github.com/oneblock-ai/okr/pkg/k3s/registry"
+	"github.com/oneblock-ai/okr/pkg/k3s/versions"
 )
 
 type plan applyinator.Plan
 
-func toInitPlan(config *config.Config, dataDir string) (*applyinator.Plan, error) {
+func toInitPlan(config *config2.Config, dataDir string) (*applyinator.Plan, error) {
 	if err := assignTokenIfUnset(config); err != nil {
 		return nil, err
 	}
@@ -29,7 +27,7 @@ func toInitPlan(config *config.Config, dataDir string) (*applyinator.Plan, error
 		return nil, err
 	}
 
-	if err := plan.addInstructions(config, dataDir); err != nil {
+	if err := plan.addInstructions(config, dataDir, true); err != nil {
 		return nil, err
 	}
 
@@ -39,8 +37,7 @@ func toInitPlan(config *config.Config, dataDir string) (*applyinator.Plan, error
 
 	return (*applyinator.Plan)(&plan), nil
 }
-
-func toJoinPlan(cfg *config.Config, dataDir string) (*applyinator.Plan, error) {
+func toJoinPlan(cfg *config2.Config, dataDir string) (*applyinator.Plan, error) {
 	if cfg.Server == "" {
 		return nil, fmt.Errorf("server is required in config for all roles besides cluster-init")
 	}
@@ -49,21 +46,18 @@ func toJoinPlan(cfg *config.Config, dataDir string) (*applyinator.Plan, error) {
 	}
 
 	plan := plan{}
-	if err := plan.addFile(cacerts.ToFile(cfg.Server, cfg.Token)); err != nil {
+
+	// add join plan files
+	if err := plan.addJoinFiles(cfg, dataDir); err != nil {
 		return nil, err
 	}
-	if err := plan.addFile(join.ToScriptFile(cfg, dataDir)); err != nil {
+
+	// add join instructions
+	if err := plan.addInstructions(cfg, dataDir, false); err != nil {
 		return nil, err
 	}
-	//if err := plan.addInstruction(cacerts.ToUpdateCACertificatesInstruction()); err != nil {
-	//	return nil, err
-	//}
-	//if err := plan.addInstruction(join.ToInstruction(cfg, dataDir)); err != nil {
-	//	return nil, err
-	//}
-	//if err := plan.addInstruction(probe.ToInstruction()); err != nil {
-	//	return nil, err
-	//}
+
+	// add probes
 	if err := plan.addProbesForJoin(cfg); err != nil {
 		return nil, err
 	}
@@ -71,25 +65,22 @@ func toJoinPlan(cfg *config.Config, dataDir string) (*applyinator.Plan, error) {
 	return (*applyinator.Plan)(&plan), nil
 }
 
-func ToPlan(ctx context.Context, config *config.Config, dataDir string) (*applyinator.Plan, error) {
+func ToPlan(ctx context.Context, config *config2.Config, dataDir string) (*applyinator.Plan, error) {
 	newCfg := *config
-	if err := discovery.DiscoverServerAndRole(ctx, &newCfg); err != nil {
-		return nil, err
-	}
 	if newCfg.Role == "cluster-init" {
 		return toInitPlan(&newCfg, dataDir)
 	}
 	return toJoinPlan(&newCfg, dataDir)
 }
 
-func (p *plan) addInstructions(cfg *config.Config, dataDir string) error {
+func (p *plan) addInstructions(cfg *config2.Config, dataDir string, addResource bool) error {
 	k8sVersion, err := versions.K8sVersion(cfg.KubernetesVersion)
 	if err != nil {
 		return err
 	}
 
 	// add runtime instruction, e.g., k3s
-	if err := p.addOneTimeInstruction(runtime.ToInstruction(cfg.RuntimeInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
+	if err := p.addOneTimeInstruction(runtime2.ToInstruction(&cfg.RuntimeConfig, cfg.RuntimeInstallerImage, cfg.SystemDefaultRegistry, k8sVersion)); err != nil {
 		return err
 	}
 
@@ -99,15 +90,17 @@ func (p *plan) addInstructions(cfg *config.Config, dataDir string) error {
 	}
 
 	// add resource instruction
-	if err := p.addPeriodInstruction(resources.ToInstruction(cfg.RancherInstallerImage, cfg.SystemDefaultRegistry, k8sVersion, dataDir)); err != nil {
-		return err
+	if addResource {
+		if err := p.addOneTimeInstruction(resources.ToInstruction(cfg.RuntimeInstallerImage, cfg.SystemDefaultRegistry, k8sVersion, dataDir)); err != nil {
+			return err
+		}
 	}
 
 	p.addPrePostInstructions(cfg, k8sVersion)
 	return nil
 }
 
-func (p *plan) addPrePostInstructions(cfg *config.Config, k8sVersion string) {
+func (p *plan) addPrePostInstructions(cfg *config2.Config, k8sVersion string) {
 	var instructions []applyinator.OneTimeInstruction
 
 	for _, inst := range cfg.PreOneTimeInstructions {
@@ -147,36 +140,41 @@ func (p *plan) addPeriodInstruction(instruction *applyinator.PeriodicInstruction
 }
 
 // addFiles helps to generate plan files
-func (p *plan) addFiles(cfg *config.Config, dataDir string) error {
+func (p *plan) addFiles(cfg *config2.Config, dataDir string) error {
 	k8sVersions, err := versions.K8sVersion(cfg.KubernetesVersion)
 	if err != nil {
 		return err
 	}
-	runtimeName := config.GetRuntime(k8sVersions)
+	runtimeName := config2.GetRuntime(k8sVersions)
 
 	// config.yaml
-	if err := p.addFile(runtime.ToFile(&cfg.RuntimeConfig, runtimeName, true)); err != nil {
-		return err
-	}
-
-	// TODO: remove as we include cluster-init config in the above addFile
-	// bootstrap config.yaml
-	if err := p.addFile(runtime.ToBootstrapFile(runtimeName)); err != nil {
+	if err := p.addFile(runtime2.ToFile(&cfg.RuntimeConfig, runtimeName, true)); err != nil {
 		return err
 	}
 
 	// registries.yaml
-	//if err := p.addFile(registry.ToFile(cfg.Registries, runtimeName)); err != nil {
-	//	return err
-	//}
+	if err := p.addFile(registry.ToFile(cfg.Registries, runtimeName)); err != nil {
+		return err
+	}
 
 	// bootstrap manifests
 	if err := p.addFile(resources.ToBootstrapFile(cfg, resources.GetBootstrapManifests(dataDir))); err != nil {
 		return err
 	}
 
-	// rancher values.yaml
-	//return p.addFile(rancher.ToFile(cfg, dataDir))
+	return nil
+}
+func (p *plan) addJoinFiles(cfg *config2.Config, dataDir string) error {
+	k8sVersions, err := versions.K8sVersion(cfg.KubernetesVersion)
+	if err != nil {
+		return err
+	}
+	runtimeName := config2.GetRuntime(k8sVersions)
+
+	// config.yaml
+	if err := p.addFile(runtime2.ToFile(&cfg.RuntimeConfig, runtimeName, false)); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -188,16 +186,16 @@ func (p *plan) addFile(file *applyinator.File, err error) error {
 	return nil
 }
 
-func (p *plan) addProbesForJoin(cfg *config.Config) error {
+func (p *plan) addProbesForJoin(cfg *config2.Config) error {
 	p.Probes = probe.ProbesForJoin(&cfg.RuntimeConfig)
 	return nil
 }
 
-func (p *plan) addProbes(cfg *config.Config) error {
+func (p *plan) addProbes(cfg *config2.Config) error {
 	k8sVersion, err := versions.K8sVersion(cfg.KubernetesVersion)
 	if err != nil {
 		return err
 	}
-	p.Probes = probe.AllProbes(config.GetRuntime(k8sVersion))
+	p.Probes = probe.AllProbes(config2.GetRuntime(k8sVersion))
 	return nil
 }

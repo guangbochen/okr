@@ -17,4 +17,4 @@ LINKFLAGS="-X github.com/oneblock-ai/okr/pkg/version.GitCommit=$COMMIT $LINKFLAG
 GOOS=linux CGO_ENABLED=0 go build -ldflags "$LINKFLAGS $OTHER_LINKFLAGS" -o bin/okr ./cmd/main.go
 
 echo "Uploading okr to $DEST_IP"
-scp ./bin/okr ubuntu@$DEST_IP:/home/ubuntu
+scp ./bin/okr ubuntu@$DEST_IP:/usr/bin/okr
