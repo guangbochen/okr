@@ -337,7 +337,7 @@ create_systemd_service_file() {
     info "systemd: Creating service file ${FILE_OKR_SERVICE}"
     $SUDO tee ${FILE_OKR_SERVICE} >/dev/null << EOF
 [Unit]
-Description=OKR Bootstrap
+Description=Open k3s and KubeRay Bootstrap
 Documentation=https://github.com/oneblock-ai/okr
 Wants=network-online.target
 After=network-online.target
